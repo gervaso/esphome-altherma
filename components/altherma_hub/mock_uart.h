@@ -18,14 +18,15 @@ namespace esphome
                 generate_response(data[2]);
             }
 
-            int available() override {
+            size_t available() override {
                 return rx_buffer_.size();
             }
 
-            void flush() override {
+            esphome::uart::FlushResult flush() override {
                 while (!rx_buffer_.empty()) {
                     rx_buffer_.pop();
                 }
+                return esphome::uart::FlushResult::SUCCESS;
             }
 
             bool read_byte(uint8_t *data) {
