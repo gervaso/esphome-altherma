@@ -93,6 +93,11 @@ Model files define the available sensors for specific Altherma units.
 **Available models:**
 - `erga_eh_da_04_08.yaml` - ERGA-D EHV/EHB/EHVZ DA series (04-08kW)
 
+### Additional Configurations
+
+MaBeniu has created config for EHVX which can be found here:  
+https://github.com/MaBeniu/esphome-altherma/tree/main/confs
+
 ## Development
 
 ### Using venv
