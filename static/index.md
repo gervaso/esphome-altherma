@@ -28,4 +28,7 @@ Flash the firmware directly from your browser — no tools required.
 
 For OTA updates, reconnect the board and click **Connect** above, then select **Update**.
 
+<script data-goatcounter="https://jjohnsen.goatcounter.com/count"
+        async src="//gc.zgo.at/count.js"></script>
+
 <script type="module" src="https://unpkg.com/esp-web-tools@10/dist/web/install-button.js?module"></script>
