@@ -1,17 +1,31 @@
 # ESPHome Altherma
 
-An [ESPHome](https://esphome.io/) custom component for monitoring Daikin Altherma heat pumps via the X10A connector, inspired by [ESPAltherma](https://github.com/raomin/ESPAltherma). It exposes temperatures, voltages, currents, and other operational data directly to [Home Assistant](https://www.home-assistant.io/).
+[![ESPHome](https://img.shields.io/badge/ESPHome-component-000?logo=esphome&logoColor=white)](https://esphome.io/)
+[![Home Assistant](https://img.shields.io/badge/Home%20Assistant-integration-41BDF5?logo=homeassistant&logoColor=white)](https://www.home-assistant.io/)
+[![GitHub stars](https://img.shields.io/github/stars/jjohnsen/esphome-altherma)](https://github.com/jjohnsen/esphome-altherma/stargazers)
+
+A native [ESPHome](https://esphome.io/) custom component for monitoring Daikin Altherma 3 heat pumps via the X10A connector. It exposes temperatures, voltages, currents, and other operational data directly to [Home Assistant](https://www.home-assistant.io/) - no MQTT, no manual config, just plug and play.
+
+🌐 [Web Installer](https://jjohnsen.github.io/esphome-altherma/) · 💬 [HA Community](https://community.home-assistant.io/t/esphome-altherma-monitor-your-daikin-altherma-3-heat-pump-via-x10a/1000476) · 🗨️ [Discussions](https://github.com/jjohnsen/esphome-altherma/discussions)
 
 ![Home Assistant dashboard showing Altherma sensor data](img/esphome0.png)
 ![ESPHome device page with Altherma entities](img/esphome1.png)
 
-<img src="https://jjohnsen.goatcounter.com/count?p=/esphome-altherma/README.md" alt="">
+## Quick Start
+
+1. Open the [Web Installer](https://jjohnsen.github.io/esphome-altherma/) in Chrome/Edge
+2. Connect your ESP32 via USB and click **Connect**
+3. Flash the firmware and configure Wi-Fi
+4. The device appears automatically in Home Assistant 🎉
+
+No command line needed. See [Installation](#installation) for more options.
+
 
 ## Features
 
-- **Real-time sensor data** — temperatures, voltages, currents, flow rates, pressures, fan speeds, and more
+- **Real-time sensor data** - temperatures, voltages, currents, flow rates, pressures, fan speeds, and more
 - **Model-specific configuration** via modular YAML files for different Altherma units
-- **Multiple board support** — ESP32, ESP32-S3, and M5Stack AtomS3 Lite
+- **Multiple board support** - ESP32, ESP32-S3, and M5Stack AtomS3 Lite
 - **Browser-based installation** via [ESP Web Tools](https://esphome.github.io/esp-web-tools/) (no command line needed)
 - **OTA updates** with automatic update checking via GitHub releases
 - **Mock UART mode** for development and testing without hardware
@@ -23,8 +37,6 @@ An [ESPHome](https://esphome.io/) custom component for monitoring Daikin Altherm
 | [ESP32 DevKit](https://www.espboards.dev/esp32/esp32doit-devkit-v1/) | `esphome-altherma-esp32.yaml` | GPIO 16 | GPIO 17 |
 | [ESP32-S3 DevKit](https://docs.espressif.com/projects/esp-dev-kits/en/latest/esp32s3/esp32-s3-devkitc-1/) | `esphome-altherma-esp32-s3.yaml` | GPIO 2 | GPIO 1 |
 | [M5Stack AtomS3 Lite](https://docs.m5stack.com/en/core/AtomS3%20Lite) | `esphome-altherma-atoms3.yaml` | GPIO 2 (G1) | GPIO 1 (G2) |
-
-All boards communicate at **9600 baud, 8 data bits, even parity, 1 stop bit**.
 
 ## Hardware Requirements
 
@@ -63,15 +75,15 @@ Refer to the [ESPAltherma wiring guide](https://github.com/raomin/ESPAltherma?ta
 
 ### Option 1: Browser Install (ESP Web Tools)
 
-The easiest way to get started — no tools to install.
+The easiest way to get started - no tools to install.
 
 1. Open https://jjohnsen.github.io/esphome-altherma/ and click **Connect**
-   ![Browser install step 1 — connect dialog](img/browser-install-1.png)
+   ![Browser install step 1 - connect dialog](img/browser-install-1.png)
 2. Follow the guided process to:
    - Flash the firmware
    - Connect to Wi-Fi
    - Add the device to Home Assistant
-   ![Browser install step 2 — device discovered](img/browser-install-2.png)
+   ![Browser install step 2 - device discovered](img/browser-install-2.png)
 
 #### Updating via Browser
 
@@ -113,9 +125,9 @@ Model files define the available sensors for specific Altherma units. Each senso
 ### Board-Specific Files
 
 Choose the YAML file matching your board:
-- `esphome-altherma-esp32.yaml` — Generic ESP32
-- `esphome-altherma-esp32-s3.yaml` — ESP32-S3 DevKit
-- `esphome-altherma-atoms3.yaml` — M5Stack AtomS3 Lite
+- `esphome-altherma-esp32.yaml` - Generic ESP32
+- `esphome-altherma-esp32-s3.yaml` - ESP32-S3 DevKit
+- `esphome-altherma-atoms3.yaml` - M5Stack AtomS3 Lite
 
 Each includes `base.yaml` (shared component setup) and the model config from `confs/`.
 
@@ -196,9 +208,8 @@ rmdir include
 
 Contributions are welcome! In particular:
 
-- **Sensor mappings for other Altherma models** — add a new file under `confs/` with the register definitions for your unit
-- **Bug reports and fixes** — open an issue or pull request
-- **Documentation improvements** — especially wiring guides for additional boards
+- **Sensor mappings for other Altherma models** - add a new file under `confs/` with the register definitions for your unit
+- **Bug reports and fixes** - open an issue or pull request
 
 If you have a successful install with a model not listed above, please share it in the [Discussions](https://github.com/jjohnsen/esphome-altherma/discussions).
 
