@@ -95,6 +95,15 @@ Model files define the available sensors for specific Altherma units.
 
 ## Development
 
+### Using venv
+
+```sh
+python3 -m venv .venv
+source .venv/bin/activate
+pip install --upgrade pip
+pip install esphome
+esphome compile esphome-altherma-esp32.yaml
+```
 ### Mock UART Mode
 
 For development without physical hardware, enable mock UART mode:
