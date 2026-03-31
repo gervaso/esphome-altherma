@@ -5,6 +5,8 @@ An [ESPHome](https://esphome.io/) custom component for monitoring Daikin Altherm
 ![Home Assistant dashboard showing Altherma sensor data](img/esphome0.png)
 ![ESPHome device page with Altherma entities](img/esphome1.png)
 
+<img src="https://jjohnsen.goatcounter.com/count?p=/esphome-altherma/README.md" alt="">
+
 ## Features
 
 - **Real-time sensor data** — temperatures, voltages, currents, flow rates, pressures, fan speeds, and more
