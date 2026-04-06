@@ -137,7 +137,7 @@ Each includes `base.yaml` (shared component setup) and the model config from `co
 ### Setting Up a Dev Environment
 
 ```sh
-python3 -m venv .venv
+python3.11 -m venv .venv
 source .venv/bin/activate
 pip install --upgrade pip
 pip install esphome
