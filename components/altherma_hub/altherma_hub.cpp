@@ -26,7 +26,6 @@ namespace altherma_hub {
   #include "converters.h"
 
 static const char *TAG = "altherma_hub";
-static constexpr size_t BUFFER_SIZE = 64;
 
 void AlthermaHub::register_sensor(AlthermaSensorBase *sensor) {
   this->sensors_.push_back(sensor);
@@ -47,92 +46,192 @@ AlthermaHub::~AlthermaHub() {
 }
 
 void AlthermaHub::update() {
-  ESP_LOGD(TAG, "Update start");
-
-  unsigned char buff[BUFFER_SIZE] = {0};
-  LabelDef label;
-
-  for (auto reg : this->registers_) {
-    ESP_LOGD(TAG, "Register 0x%02X", reg);
-
-    if (!this->query_registry(reg, buff)) {
-      continue;
-    }
-
-    for (auto *sensor : sensors_) {
-      if (sensor->registry_id() != reg) {
-        continue;
-      }
-      if (decode_label(sensor, buff, label)) {
-        sensor->publish_state(label.asString);
-      }
-    }
+  if (this->registers_.empty()) {
+    ESP_LOGV(TAG, "No registers configured");
+    return;
   }
-  
-  ESP_LOGD(TAG, "Update end");
+
+  if (this->poll_active_) {
+    ESP_LOGW(TAG, "Previous poll cycle still active, skipping tick");
+    return;
+  }
+
+  ESP_LOGD(TAG, "Update start");
+  this->cycle_started_at_ = millis();
+  this->begin_poll_cycle_();
 }
 
-bool AlthermaHub::decode_label(AlthermaSensorBase *sensor, unsigned char *frame, LabelDef &out) {
+void AlthermaHub::loop() {
+  if (!this->poll_active_) {
+    return;
+  }
+
+  switch (this->query_state_) {
+    case QueryState::SEND_QUERY:
+      this->start_query_(this->registers_[this->register_index_]);
+      break;
+    case QueryState::READ_RESPONSE:
+      this->read_response_();
+      break;
+    case QueryState::IDLE:
+    default:
+      break;
+  }
+}
+
+bool AlthermaHub::decode_label(AlthermaSensorBase *sensor, unsigned char *frame, size_t frame_len, LabelDef &out) {
+  if (frame_len < 4) {
+    ESP_LOGE(TAG, "Frame too short for register 0x%02x: len=%d", sensor->registry_id(), frame_len);
+    return false;
+  }
+
+  const int offset = sensor->offset();
+  const int data_size = sensor->datasize();
+  if (offset < 0 || data_size <= 0) {
+    ESP_LOGE(TAG, "Invalid sensor bounds for '%s': offset=%d size=%d", sensor->get_name().c_str(), offset, data_size);
+    return false;
+  }
+
+  const size_t payload_start = static_cast<size_t>(offset) + 3;
+  const size_t payload_end = payload_start + static_cast<size_t>(data_size);
+  const size_t frame_data_end = frame_len - 1;  // exclude CRC byte
+  if (payload_start >= frame_data_end || payload_end > frame_data_end) {
+    ESP_LOGE(TAG,
+             "Out-of-bounds decode for '%s' reg=0x%02x offset=%d size=%d frame_len=%d",
+             sensor->get_name().c_str(), sensor->registry_id(), offset, data_size, frame_len);
+    return false;
+  }
+
   out = LabelDef(
     sensor->registry_id(),
-    sensor->offset(),
+    offset,
     sensor->convid(),
-    sensor->datasize(),
+    data_size,
     1,
     sensor->get_name().c_str()
   );
 
-  unsigned char *input = frame + sensor->offset() + 3;
+  unsigned char *input = frame + payload_start;
   this->converter_->convert(&out, input);
 
   return true;
 }
 
-bool AlthermaHub::query_registry(uint8_t regID, unsigned char *buffer) {
+void AlthermaHub::begin_poll_cycle_() {
+  this->poll_active_ = true;
+  this->register_index_ = 0;
+  this->query_state_ = QueryState::SEND_QUERY;
+}
+
+void AlthermaHub::start_query_(uint8_t regID) {
   auto uart = this->parent_;
 #ifdef USE_MOCK_UART
   ESP_LOGW(TAG, "Using MockUART");
-  uart = new MockUART();
+  static MockUART mock_uart;
+  uart = &mock_uart;
 #endif
 
   uint8_t command[] = {0x03, 0x40, regID, 0x00};
   command[3] = calculate_crc(command, 3);
 
-  ESP_LOGV(TAG, "Querying register 0x%02x... CRC: 0x%02x", regID, command[3]);  
+  this->current_register_ = regID;
+  this->rx_len_ = 0;
+  this->expected_total_ = 12;  // until byte[2] (length) is known
+  this->query_started_at_ = millis();
+
+  ESP_LOGV(TAG, "Querying register 0x%02x... CRC: 0x%02x", regID, command[3]);
   uart->flush();
   uart->write_array(command, 4);
+  this->query_state_ = QueryState::READ_RESPONSE;
+}
 
-  const uint32_t start_time = millis();
-  int len = 0;
-  buffer[2] = 10;  // expected payload length
+void AlthermaHub::read_response_() {
+  auto uart = this->parent_;
+#ifdef USE_MOCK_UART
+  static MockUART mock_uart;
+  uart = &mock_uart;
+#endif
+
+  if (millis() - this->query_started_at_ > QUERY_TIMEOUT_MS) {
+    ESP_LOGE(TAG, "Timeout waiting for response for register 0x%02x", this->current_register_);
+    this->advance_register_();
+    return;
+  }
+
+  const size_t available = uart->available();
+  if (available == 0) {
+    return;
+  }
+
+  const size_t remaining = this->expected_total_ - this->rx_len_;
+  const size_t to_read = available < remaining ? available : remaining;
   uint8_t byte;
 
-  while (len < buffer[2] + 2) {
-     if (uart->available()) {
-      if (uart->read_byte(&byte)) {
-        buffer[len++] = byte;
-      }
-    } else if (millis() - start_time > 100) {
-      ESP_LOGE(TAG, "Timeout waiting for response for register 0x%02x", regID);
-      return false;
+  if (to_read > 0 && uart->read_array(this->rx_buffer_ + this->rx_len_, to_read)) {
+    this->rx_len_ += to_read;
+  } else if (uart->read_byte(&byte)) {
+    // Fallback if available() changed since sampling.
+    this->rx_buffer_[this->rx_len_++] = byte;
+  } else {
+    return;
+  }
+
+  if (this->rx_len_ >= 3) {
+    this->expected_total_ = static_cast<size_t>(this->rx_buffer_[2]) + 2;
+    if (this->expected_total_ > RX_BUFFER_SIZE) {
+      ESP_LOGE(TAG, "Invalid frame length 0x%02x for register 0x%02x", this->rx_buffer_[2], this->current_register_);
+      this->advance_register_();
+      return;
     }
-    yield();
   }
 
-  unsigned char crc = calculate_crc(buffer, len - 1);
-  if (crc != buffer[len - 1]) {
-    ESP_LOGE(TAG, "CRC Invalid: 0x%02x (expected 0x%02x)", buffer[len - 1], crc);
-    return false;
+  if (this->rx_len_ >= this->expected_total_) {
+    this->handle_complete_frame_();
+  }
+}
+
+void AlthermaHub::handle_complete_frame_() {
+  unsigned char crc = calculate_crc(this->rx_buffer_, this->rx_len_ - 1);
+  if (crc != this->rx_buffer_[this->rx_len_ - 1]) {
+    ESP_LOGE(TAG, "CRC Invalid: 0x%02x (expected 0x%02x)", this->rx_buffer_[this->rx_len_ - 1], crc);
+    this->advance_register_();
+    return;
   }
 
-  if (buffer[1] != regID) {
-    ESP_LOGE(TAG, "Invalid register response: 0x%02x - asked for 0x%02x", buffer[1], regID);
-    return false;
+  if (this->rx_buffer_[1] != this->current_register_) {
+    ESP_LOGE(TAG, "Invalid register response: 0x%02x - asked for 0x%02x", this->rx_buffer_[1], this->current_register_);
+    this->advance_register_();
+    return;
   }
 
-  auto delta = millis() - start_time;
-  ESP_LOGD(TAG, "Query register 0x%02x OK CRC: 0x%02x Length: 0x%02x Time: %d ms", buffer[1], buffer[len - 1], buffer[2], delta);
-  return true;
+  LabelDef label;
+  for (auto *sensor : this->sensors_) {
+    if (sensor->registry_id() != this->current_register_) {
+      continue;
+    }
+
+    if (this->decode_label(sensor, this->rx_buffer_, this->rx_len_, label)) {
+      sensor->publish_state(label.asString);
+    }
+  }
+
+  auto delta = millis() - this->query_started_at_;
+  ESP_LOGD(TAG, "Query register 0x%02x OK CRC: 0x%02x Length: 0x%02x Time: %d ms",
+           this->rx_buffer_[1], this->rx_buffer_[this->rx_len_ - 1], this->rx_buffer_[2], delta);
+  this->advance_register_();
+}
+
+void AlthermaHub::advance_register_() {
+  this->register_index_++;
+  if (this->register_index_ >= this->registers_.size()) {
+    this->poll_active_ = false;
+    this->query_state_ = QueryState::IDLE;
+    const auto update_delta = millis() - this->cycle_started_at_;
+    ESP_LOGD(TAG, "Update end (%u ms)", update_delta);
+    return;
+  }
+
+  this->query_state_ = QueryState::SEND_QUERY;
 }
 
 unsigned char AlthermaHub::calculate_crc(unsigned char *src, size_t len) {
